@@ -30,7 +30,7 @@ const categories = [
   { name: "Secure Notes", detail: "Private thoughts and notes", count: "06 items", icon: FileText },
 ];
 
-export default function App() {
+export default function App({ onSignOut }: { onSignOut: () => void }) {
   const [section, setSection] = useState<Section>("Overview");
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -61,7 +61,7 @@ export default function App() {
             <label className="search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search your vault..." /><kbd>⌘ K</kbd></label>
             <button className="icon-btn" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}><Bell size={18}/></button>
             <button className="icon-btn" aria-label="Toggle theme" onClick={() => setDark(v => !v)}><span className="theme-glyph">{dark ? "☼" : "☾"}</span></button>
-            <button className="lock-btn" onClick={() => setNotice("Vault locking will be enabled with the authentication module.")}><LockKeyhole size={15}/> Lock vault</button>
+            <button className="lock-btn" onClick={onSignOut}><LockKeyhole size={15}/> Sign out</button>
           </div>
         </header>
 
