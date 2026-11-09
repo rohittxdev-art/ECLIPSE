@@ -13,6 +13,8 @@ ECLIPSE is a privacy-first personal digital vault built with React, TypeScript, 
 - Searchable built-in icon library (50+ categorized icons), platform icon detection, restore-detected icon, and encrypted custom icon uploads.
 - Encrypted backup export and restore.
 - Five-minute inactivity lock.
+- Vault Pulse: local checks for short, reused, and older saved passwords; password values are never sent for analysis.
+- Installable Progressive Web App (PWA) with original ECLIPSE icon, standalone launch, and static-asset-only offline caching. Auth/API/storage responses are never cached by the service worker.
 - Owner-scoped Row Level Security and private Storage policies.
 
 ## Stack
@@ -28,7 +30,7 @@ ECLIPSE is a privacy-first personal digital vault built with React, TypeScript, 
 - Recovery kits contain the material needed to recover the vault. Keep them offline and never share them.
 - Backups contain encrypted records and encrypted file blobs. Store backup files securely.
 - The browser app is not a substitute for an independent security audit. Do not use it as the only copy of important credentials until end-to-end tests and an independent security review are complete.
-- Device/session administration, native Windows/Android/iOS packaging, file version history, and a full security-center dashboard are not included in the current web release.
+- Native Windows/Android/iOS packages, hardware-backed native key storage, device/session administration, file version history, and an independent security audit are not included in the current web release. The PWA can be installed from a supported browser, but it is not a native app.
 - Enable Supabase Auth leaked-password protection in the Supabase Dashboard under Authentication → Security and Protection.
 
 ## Environment
