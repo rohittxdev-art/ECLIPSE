@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import {
-  Activity, Archive, ArrowDownToLine, ArrowUpRight, Bell, Check,
-  ChevronDown, Clock3, Cloud, Command, FileImage, FileText, Fingerprint,
-  FolderClosed, HardDrive, Heart, KeyRound, LayoutDashboard, LockKeyhole,
-  LogOut, MoreHorizontal, Plus, Search, Settings2, Shield, ShieldCheck,
-  Smartphone, Star, Trash2, UploadCloud, X,
+  ArrowUpRight, Bell, Check, ChevronDown, Clock3, Cloud, FileImage,
+  FileText, Fingerprint, FolderClosed, HardDrive, KeyRound,
+  LayoutDashboard, LockKeyhole, MoreHorizontal, Plus, Search, Settings2,
+  Shield, ShieldCheck, Star, Trash2, UploadCloud, X,
 } from "lucide-react";
 
 type Section = "Overview" | "Passwords" | "Files & Documents" | "Gallery" | "Email Accounts" | "Secure Notes" | "Favorites" | "Recent" | "Recycle Bin";
