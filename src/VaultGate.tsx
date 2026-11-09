@@ -164,7 +164,7 @@ export default function VaultGate({ user, onSignOut }: { user: User; onSignOut: 
           </> : <>
             <label>Master passphrase<div className="password-field"><input type={showPassword ? "text" : "password"} value={masterPassword} onChange={e => setMasterPassword(e.target.value)} placeholder="At least 12 characters" autoComplete="off" minLength={12} required/><button type="button" aria-label={showPassword ? "Hide passphrase" : "Show passphrase"} onClick={() => setShowPassword(v => !v)}>{showPassword ? <EyeOff size={17}/> : <Eye size={17}/>}</button></div></label>
             {!configured && <label>Confirm master passphrase<input type={showPassword ? "text" : "password"} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Enter it again" autoComplete="off" minLength={12} required /></label>}
-          </>}}
+          </>}
           {error && <div className="auth-error" role="alert">{error}</div>}
           {message && <div className="auth-message" role="status">{message}</div>}
           <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Securing your vault…" : recoveryMode ? "Recover and set new passphrase" : configured ? "Unlock vault" : "Create master key"} <ArrowRight size={16}/></button>
