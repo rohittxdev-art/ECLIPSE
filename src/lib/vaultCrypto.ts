@@ -1,4 +1,4 @@
-import sodium from "libsodium-wrappers-sumo";
+let sodium: typeof import("libsodium-wrappers-sumo").default;
 
 export type KdfParameters = {
   salt: string;
@@ -15,6 +15,10 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
 async function ready() {
+  if (!sodium) {
+    const module = await import("libsodium-wrappers-sumo");
+    sodium = module.default;
+  }
   await sodium.ready;
 }
 
