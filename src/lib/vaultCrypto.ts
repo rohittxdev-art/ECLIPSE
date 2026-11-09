@@ -129,3 +129,67 @@ export async function decryptVaultBytes(ciphertext: Uint8Array, nonce: string, v
     null, ciphertext, aad, sodium.from_base64(nonce), vaultKey,
   );
 }
+
+
+export type RecoveryKit = {
+  format: "ECLIPSE-RECOVERY";
+  version: 1;
+  userId: string;
+  recoveryKey: string;
+  nonce: string;
+  ciphertext: string;
+  createdAt: string;
+};
+
+export async function createRecoveryKit(vaultKey: Uint8Array, userId: string): Promise<RecoveryKit> {
+  await ready();
+  const recoveryKey = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_KEYBYTES);
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const aad = encoder.encode(`ECLIPSE|recovery|v1|${userId}`);
+  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(vaultKey, aad, null, nonce, recoveryKey);
+  const kit: RecoveryKit = {
+    format: "ECLIPSE-RECOVERY",
+    version: 1,
+    userId,
+    recoveryKey: sodium.to_base64(recoveryKey),
+    nonce: sodium.to_base64(nonce),
+    ciphertext: sodium.to_base64(ciphertext),
+    createdAt: new Date().toISOString(),
+  };
+  sodium.memzero(recoveryKey);
+  return kit;
+}
+
+export async function restoreVaultKeyFromKit(kit: RecoveryKit, userId: string): Promise<Uint8Array> {
+  await ready();
+  if (kit.format !== "ECLIPSE-RECOVERY" || kit.version !== 1 || kit.userId !== userId) {
+    throw new Error("Recovery file is invalid or belongs to another account.");
+  }
+  const recoveryKey = sodium.from_base64(kit.recoveryKey);
+  try {
+    const aad = encoder.encode(`ECLIPSE|recovery|v1|${userId}`);
+    return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null, sodium.from_base64(kit.ciphertext), aad, sodium.from_base64(kit.nonce), recoveryKey,
+    );
+  } finally {
+    sodium.memzero(recoveryKey);
+  }
+}
+
+export async function wrapExistingVaultKey(
+  masterPassword: string,
+  params: KdfParameters,
+  userId: string,
+  vaultKey: Uint8Array,
+): Promise<WrappedVaultKey> {
+  await ready();
+  const wrappingKey = await deriveWrappingKey(masterPassword, params);
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const aad = encoder.encode(`ECLIPSE|vault-key|v1|${userId}`);
+  try {
+    const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(vaultKey, aad, null, nonce, wrappingKey);
+    return { nonce: sodium.to_base64(nonce), ciphertext: sodium.to_base64(ciphertext) };
+  } finally {
+    sodium.memzero(wrappingKey);
+  }
+}
