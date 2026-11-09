@@ -50,7 +50,6 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   const [website,setWebsite]=useState("");
   const [body,setBody]=useState("");
   const [file,setFile]=useState<File|null>(null);
-  const [bulkFiles,setBulkFiles]=useState<File[]>([]);
   const bulkInputRef=useRef<HTMLInputElement|null>(null);
   const folderInputRef=useRef<HTMLInputElement|null>(null);
   const [iconKey,setIconKey]=useState("key");
@@ -172,7 +171,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     if(files.length>150){setError("Choose up to 150 files at a time.");return;}
     if(files.some(f=>f.size>50*1024*1024)){setError("Each file must be 50 MB or smaller.");return;}
     if(total>250*1024*1024){setError("The combined upload must be 250 MB or smaller.");return;}
-    setSaving(true);setError("");setBulkFiles(files);
+    setSaving(true);setError("");
     const uploadedPaths:string[]=[];const insertedIds:string[]=[];
     try{
       for(const selectedFile of files){
@@ -207,7 +206,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       if(insertedIds.length)await supabase.from("vault_items").delete().in("id",insertedIds).eq("user_id",userId);
       if(uploadedPaths.length)await supabase.storage.from("eclipse-vault").remove(uploadedPaths);
       setError(cause instanceof Error?cause.message:"Some files could not be added. Completed uploads were rolled back.");
-    }finally{setSaving(false);setBulkFiles([]);if(bulkInputRef.current)bulkInputRef.current.value="";if(folderInputRef.current)folderInputRef.current.value="";}
+    }finally{setSaving(false);if(bulkInputRef.current)bulkInputRef.current.value="";if(folderInputRef.current)folderInputRef.current.value="";}
   }
 
   async function toggleFavorite(item:Item){
