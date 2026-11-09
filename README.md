@@ -10,6 +10,7 @@ ECLIPSE is a privacy-first personal digital vault built with React, TypeScript, 
 - Encrypted file upload/download, favorites, search, edit, restore and permanent delete.
 - Recycle Bin with a 30-day expiry timestamp and a scheduled hourly cleanup Edge Function.
 - Offline recovery-kit export/import for master-passphrase reset.
+- Searchable built-in icon library (50+ categorized icons), platform icon detection, restore-detected icon, and encrypted custom icon uploads.
 - Encrypted backup export and restore.
 - Five-minute inactivity lock.
 - Owner-scoped Row Level Security and private Storage policies.
