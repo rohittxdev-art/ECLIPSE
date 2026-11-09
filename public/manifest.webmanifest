@@ -1,0 +1,18 @@
+{
+  "name": "ECLIPSE — Personal Digital Vault",
+  "short_name": "ECLIPSE",
+  "description": "Your private digital world.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#08090D",
+  "theme_color": "#08090D",
+  "icons": [
+    {
+      "src": "/eclipse-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
