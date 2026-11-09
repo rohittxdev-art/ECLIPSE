@@ -49,7 +49,7 @@ export async function wrapNewVaultKey(
   const wrappingKey = await deriveWrappingKey(masterPassword, params);
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
   const aad = encoder.encode(`ECLIPSE|vault-key|v1|${userId}`);
-  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(vaultKey, aad, nonce, wrappingKey);
+  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(vaultKey, aad, null, nonce, wrappingKey);
   sodium.memzero(wrappingKey);
   return {
     vaultKey,
@@ -87,7 +87,7 @@ export async function encryptVaultValue<T>(value: T, vaultKey: Uint8Array, userI
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
   const aad = encoder.encode(`ECLIPSE|item|v1|${userId}`);
   const plaintext = encoder.encode(JSON.stringify(value));
-  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(plaintext, aad, nonce, vaultKey);
+  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(plaintext, aad, null, nonce, vaultKey);
   sodium.memzero(plaintext);
   return { ciphertext: sodium.to_base64(ciphertext), nonce: sodium.to_base64(nonce) };
 }
