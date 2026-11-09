@@ -36,3 +36,39 @@
 
 .vault-top-actions input[type="file"][hidden]{display:none}
 @media(max-width:760px){.vault-top-actions{flex-wrap:wrap}.vault-top-actions .vault-add{font-size:9px;padding:8px 9px}}
+
+
+/* ECLIPSE live transfer tracker */
+.vault-upload-tracker{position:relative;display:flex;align-items:center;gap:15px;margin:18px 4% 0;padding:16px 48px 16px 17px;border:1px solid #4a2633;border-radius:14px;background:radial-gradient(ellipse at 0% 50%,#f329501c,transparent 48%),linear-gradient(110deg,#171116,#101116 72%);box-shadow:0 12px 35px #0004;overflow:hidden}
+.vault-upload-tracker:before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:linear-gradient(180deg,transparent,#f32950,transparent)}
+.vault-upload-orbit{width:48px;height:48px;flex:0 0 48px;border:1px solid #6e3444;border-radius:50%;display:grid;place-items:center;position:relative;background:#f3295010}
+.vault-upload-orbit:before,.vault-upload-orbit:after{content:"";position:absolute;inset:4px;border:1px dashed #f3295077;border-radius:50%;animation:vaultOrbit 9s linear infinite}
+.vault-upload-orbit:after{inset:-4px;border-color:#f3295033;animation-direction:reverse;animation-duration:14s}
+.vault-upload-orbit-core{width:29px;height:29px;border-radius:50%;display:grid;place-items:center;background:#f32950;color:#fff;box-shadow:0 0 18px #f3295077}
+.vault-upload-orbit-core span{width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 12px #fff;animation:vaultPulse 1.2s ease-in-out infinite}
+.vault-upload-main{min-width:0;flex:1;display:grid;gap:7px}
+.vault-upload-heading,.vault-upload-meta{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vault-upload-heading>div{display:grid;gap:3px;min-width:0}
+.vault-upload-heading .vault-eyebrow{font-size:7px;color:#ff8298}
+.vault-upload-heading b{font:700 12px Manrope;color:#f5f5f7}
+.vault-upload-heading strong{font:800 20px Manrope;color:#ff8298;white-space:nowrap}
+.vault-upload-track{height:7px;border-radius:20px;background:#29202a;overflow:hidden;box-shadow:inset 0 1px 3px #0008}
+.vault-upload-track span{display:block;height:100%;min-width:0;border-radius:20px;background:linear-gradient(90deg,#a91c3a,#f32950,#ff91a5);box-shadow:0 0 13px #f3295088;transition:width .35s ease}
+.vault-upload-meta{font-size:8px;color:#a4a6b0;font-variant-numeric:tabular-nums}
+.vault-upload-current{display:flex;align-items:center;gap:7px;min-width:0;color:#d4b7bf;font-size:9px}
+.vault-upload-current span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vault-upload-pulse{width:6px;height:6px;flex:0 0 6px;border-radius:50%;background:#f32950;box-shadow:0 0 9px #f32950;animation:vaultPulse 1s ease-in-out infinite}
+.vault-upload-eta,.vault-upload-error{font-size:8px;color:#9296a3}
+.vault-upload-error{color:#ff9aaa;overflow-wrap:anywhere}
+.vault-upload-dismiss{position:absolute;right:12px;top:12px;width:26px;height:26px;display:grid;place-items:center;border:1px solid #34313a;border-radius:7px;background:#17181f;color:#9296a3;cursor:pointer}
+.vault-upload-tracker.done{border-color:#28523f;background:radial-gradient(ellipse at 0% 50%,#42c58a18,transparent 48%),#101713}
+.vault-upload-tracker.done:before{background:linear-gradient(180deg,transparent,#42c58a,transparent)}
+.vault-upload-tracker.done .vault-upload-orbit{border-color:#397b5c;background:#42c58a12}
+.vault-upload-tracker.done .vault-upload-orbit-core{background:#269c68;box-shadow:0 0 18px #42c58a66}
+.vault-upload-tracker.done .vault-upload-heading .vault-eyebrow,.vault-upload-tracker.done .vault-upload-heading strong{color:#83e0b2}
+.vault-upload-tracker.done .vault-upload-track span{background:linear-gradient(90deg,#218b5b,#52d59a)}
+.vault-upload-tracker.error{border-color:#713344}
+.vault-upload-tracker.error .vault-upload-orbit-core{background:#a92e49}
+@keyframes vaultOrbit{to{transform:rotate(360deg)}}
+@keyframes vaultPulse{50%{opacity:.35;transform:scale(.75)}}
+@media(max-width:760px){.vault-upload-tracker{margin:13px 13px 0;padding:13px 42px 13px 12px;gap:11px}.vault-upload-orbit{width:40px;height:40px;flex-basis:40px}.vault-upload-heading b{font-size:10px}.vault-upload-heading strong{font-size:17px}.vault-upload-meta{font-size:7px}.vault-upload-current{font-size:8px}}
