@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import {
   ArrowDownToLine, Check, Copy, Download, FileImage, FileText, Heart, KeyRound,
   LockKeyhole, LogOut, Plus, Search, ShieldCheck, Star, Trash2, Undo2, X,
-  Globe, Instagram, Youtube, Facebook, MessageCircle, Send, Music2, Gamepad2, Twitch, Linkedin, Github, Chrome, Mail, Cloud, HardDrive, FileArchive, FileSpreadsheet, FileCode, Image, Camera, Video, Mic, Headphones, BookOpen, GraduationCap, BriefcaseBusiness, CreditCard, Wallet, ShoppingBag, ShoppingCart, Plane, Car, Home, HeartPulse, Dumbbell, Utensils, CalendarDays, Bell, Key, Shield, Fingerprint, Lock, Smartphone, Laptop, Monitor, Wifi, Server, Database, Bitcoin, Landmark, Newspaper, MapPin, Package, Tag, Star as StarIcon, Zap, Rocket, Coffee, Gift, Ticket, Folder, FolderLock,
+  Globe, Instagram, Youtube, Facebook, MessageCircle, Send, Music2, Gamepad2, Twitch, Linkedin, Github, Chrome, Mail, Cloud, FileArchive, FileSpreadsheet, FileCode, Image, Camera, Video, Mic, Headphones, BookOpen, GraduationCap, BriefcaseBusiness, CreditCard, Wallet, ShoppingBag, ShoppingCart, Plane, Car, Home, HeartPulse, Dumbbell, Utensils, CalendarDays, Bell, Key, Shield, Fingerprint, Lock, Smartphone, Laptop, Monitor, Wifi, Server, Database, Bitcoin, Landmark, Newspaper, MapPin, Package, Tag, Star as StarIcon, Zap, Rocket, Coffee, Gift, Ticket, Folder, FolderLock,
 } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import { createRecoveryKit, decryptVaultBytes, decryptVaultValue, encryptVaultBytes, encryptVaultValue } from "./lib/vaultCrypto";
