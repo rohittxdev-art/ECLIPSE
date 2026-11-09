@@ -25,9 +25,9 @@ const iconCatalog = [
 const iconCategories = ["All",...Array.from(new Set(iconCatalog.map(icon=>icon.category)))];
 function detectPlatformIcon(value:string){
   const text=value.trim().toLowerCase();
-  const host=text.replace(/^https?:\\/\\//,"").split(/[/?#]/)[0].replace(/^www\\./,"");
+  const host=text.replace(/^https?:\/\//,"").split(/[/?#]/)[0].replace(/^www\./,"");
   const rules:[RegExp,string][]=[
-    [/instagram\\.com|instagram/,"instagram"],[/youtube\\.com|youtu\\.be|youtube/,"youtube"],[/facebook\\.com|facebook/,"facebook"],[/telegram\\.(org|me)|telegram/,"telegram"],[/twitch\\.tv|twitch/,"twitch"],[/linkedin\\.com|linkedin/,"linkedin"],[/github\\.com|github/,"github"],[/gmail\\.com|googlemail\\.com|gmail/,"mail"],[/spotify\\.com|spotify/,"music"],[/discord\\.com|discord/,"chat"],[/netflix\\.com|netflix/,"video"],[/amazon\\./,"shop"],[/paypal\\.com|paypal/,"wallet"],[/microsoft\\.com|outlook/,"work"],[/apple\\.com|icloud/,"cloud"],[/google\\.com|google/,"globe"],[/steamcommunity\\.com|steampowered\\.com|steam/,"game"]
+    [/instagram\.com|instagram/,"instagram"],[/youtube\.com|youtu\.be|youtube/,"youtube"],[/facebook\.com|facebook/,"facebook"],[/telegram\.(org|me)|telegram/,"telegram"],[/twitch\.tv|twitch/,"twitch"],[/linkedin\.com|linkedin/,"linkedin"],[/github\.com|github/,"github"],[/gmail\.com|googlemail\.com|gmail/,"mail"],[/spotify\.com|spotify/,"music"],[/discord\.com|discord/,"chat"],[/netflix\.com|netflix/,"video"],[/amazon\./,"shop"],[/paypal\.com|paypal/,"wallet"],[/microsoft\.com|outlook/,"work"],[/apple\.com|icloud/,"cloud"],[/google\.com|google/,"globe"],[/steamcommunity\.com|steampowered\.com|steam/,"game"]
   ];
   return rules.find(([pattern])=>pattern.test(host)||pattern.test(text))?.[1]??"globe";
 }
