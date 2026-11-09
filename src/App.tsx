@@ -9,7 +9,7 @@ import { supabase } from "./lib/supabase";
 import { createRecoveryKit, decryptVaultBytes, decryptVaultValue, encryptVaultBytes, encryptVaultValue } from "./lib/vaultCrypto";
 
 type Kind = "password" | "email" | "note" | "file" | "gallery";
-type VaultPayload = { title: string; username?: string; secret?: string; website?: string; body?: string; fileName?: string; mimeType?: string; fileSize?: number; fileNonce?: string; iconKey?: string; customIconData?: string };
+type VaultPayload = { title: string; username?: string; secret?: string; website?: string; body?: string; fileName?: string; mimeType?: string; fileSize?: number; fileNonce?: string; folderPath?: string; iconKey?: string; customIconData?: string };
 type Row = { id: string; user_id: string; item_type: Kind; payload_ciphertext: string; payload_nonce: string; storage_path: string | null; is_favorite: boolean; deleted_at: string | null; purge_after: string | null; created_at: string; updated_at: string };
 type Item = Row & { payload: VaultPayload };
 type Section = "all" | Kind | "favorites" | "recent" | "trash" | "health";
@@ -50,6 +50,9 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   const [website,setWebsite]=useState("");
   const [body,setBody]=useState("");
   const [file,setFile]=useState<File|null>(null);
+  const [bulkFiles,setBulkFiles]=useState<File[]>([]);
+  const bulkInputRef=useRef<HTMLInputElement|null>(null);
+  const folderInputRef=useRef<HTMLInputElement|null>(null);
   const [iconKey,setIconKey]=useState("key");
   const [customIconData,setCustomIconData]=useState("");
   const [iconQuery,setIconQuery]=useState("");
@@ -159,6 +162,52 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       if(uploadedPath) await supabase.storage.from("eclipse-vault").remove([uploadedPath]);
       setError(cause instanceof Error?cause.message:"Could not save this item.");
     }finally{setSaving(false);}
+  }
+
+  async function uploadMultipleFiles(selected:File[]){
+    if(!supabase||!selected.length)return;
+    const files=selected.filter(f=>f.size>0);
+    const total=files.reduce((sum,f)=>sum+f.size,0);
+    if(!files.length){setError("The selected folder has no files to upload.");return;}
+    if(files.length>150){setError("Choose up to 150 files at a time.");return;}
+    if(files.some(f=>f.size>50*1024*1024)){setError("Each file must be 50 MB or smaller.");return;}
+    if(total>250*1024*1024){setError("The combined upload must be 250 MB or smaller.");return;}
+    setSaving(true);setError("");setBulkFiles(files);
+    const uploadedPaths:string[]=[];const insertedIds:string[]=[];
+    try{
+      for(const selectedFile of files){
+        const bytes=new Uint8Array(await selectedFile.arrayBuffer());
+        const encrypted=await encryptVaultBytes(bytes,vaultKey,userId);
+        const id=crypto.randomUUID();const path=`${userId}/${id}.ecl`;
+        const {error:uploadError}=await supabase.storage.from("eclipse-vault").upload(path,new Blob([encrypted.ciphertext.buffer as ArrayBuffer],{type:"application/octet-stream"}),{contentType:"application/octet-stream",upsert:false});
+        if(uploadError)throw uploadError;
+        uploadedPaths.push(path);
+        const relativePath=(selectedFile as File & {webkitRelativePath?:string}).webkitRelativePath||"";
+        const payload:VaultPayload={
+          title:selectedFile.name,
+          fileName:selectedFile.name,
+          mimeType:selectedFile.type||"application/octet-stream",
+          fileSize:selectedFile.size,
+          fileNonce:encrypted.nonce,
+          folderPath:relativePath.includes("/")?relativePath.slice(0,relativePath.lastIndexOf("/")):undefined,
+          iconKey:selectedFile.type.startsWith("image/")?"image":selectedFile.name.toLowerCase().endsWith(".zip")?"archive":"folder"
+        };
+        const encryptedPayload=await encryptVaultValue(payload,vaultKey,userId);
+        const {error:insertError}=await supabase.from("vault_items").insert({
+          id,user_id:userId,item_type:selectedFile.type.startsWith("image/")?"gallery":"file",
+          payload_ciphertext:encryptedPayload.ciphertext,payload_nonce:encryptedPayload.nonce,
+          storage_path:path,is_favorite:false
+        });
+        if(insertError)throw insertError;
+        insertedIds.push(id);
+      }
+      setNotice(`Securely added ${files.length} file${files.length===1?"":"s"} to your vault.`);
+      setSection("all");await loadItems();
+    }catch(cause){
+      if(insertedIds.length)await supabase.from("vault_items").delete().in("id",insertedIds).eq("user_id",userId);
+      if(uploadedPaths.length)await supabase.storage.from("eclipse-vault").remove(uploadedPaths);
+      setError(cause instanceof Error?cause.message:"Some files could not be added. Completed uploads were rolled back.");
+    }finally{setSaving(false);setBulkFiles([]);if(bulkInputRef.current)bulkInputRef.current.value="";if(folderInputRef.current)folderInputRef.current.value="";}
   }
 
   async function toggleFavorite(item:Item){
@@ -365,7 +414,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       <div className="vault-side-bottom"><div className="vault-encrypted"><LockKeyhole size={15}/><span>End-to-end encrypted<br/><small>Keys stay on this device</small></span></div><button className="vault-lock" onClick={onSignOut}><LogOut size={15}/> Lock vault</button></div>
     </aside>
     <section className="vault-main">
-      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>{setCloudModal(true);setScanOpen(false);}} disabled={saving}><Cloud size={15}/> QR Cloud</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
+      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>{setCloudModal(true);setScanOpen(false);}} disabled={saving}><Cloud size={15}/> QR Cloud</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>bulkInputRef.current?.click()} disabled={saving}><Plus size={15}/> Add files</button><button className="vault-add" onClick={()=>folderInputRef.current?.click()} disabled={saving}><Folder size={15}/> Add folder</button><input ref={bulkInputRef} hidden type="file" multiple onChange={e=>void uploadMultipleFiles(Array.from(e.target.files??[]))}/><input ref={el=>{folderInputRef.current=el;if(el)el.setAttribute("webkitdirectory","");}} hidden type="file" multiple onChange={e=>void uploadMultipleFiles(Array.from(e.target.files??[]))}/><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
       <div className="vault-content">
         <div className="vault-intro"><div><span className="vault-eyebrow">PRIVATE BY DESIGN</span><h1>{labels[section]}</h1><p>{section==="trash"?"Restore deleted items or permanently remove them.": "Your items are encrypted before they leave this device."}</p></div><div className="vault-count"><b>{visible.length}</b><span>ITEMS</span></div></div>
         {error&&<div className="vault-error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
