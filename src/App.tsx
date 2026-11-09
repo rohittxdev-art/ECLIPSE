@@ -61,7 +61,7 @@ export default function App({ onSignOut }: { onSignOut: () => void }) {
             <label className="search"><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search your vault..." /><kbd>⌘ K</kbd></label>
             <button className="icon-btn" aria-label="Notifications" onClick={() => setNotice("You're all caught up.")}><Bell size={18}/></button>
             <button className="icon-btn" aria-label="Toggle theme" onClick={() => setDark(v => !v)}><span className="theme-glyph">{dark ? "☼" : "☾"}</span></button>
-            <button className="lock-btn" onClick={onSignOut}><LockKeyhole size={15}/> Sign out</button>
+            <button className="lock-btn" onClick={onSignOut}><LockKeyhole size={15}/> Lock vault</button>
           </div>
         </header>
 
