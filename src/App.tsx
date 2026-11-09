@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import QRCode from "qrcode";
 import {
   ArrowDownToLine, Check, Copy, Download, FileImage, FileText, Heart, KeyRound,
   LockKeyhole, LogOut, Plus, Search, ShieldCheck, Star, Trash2, Undo2, X,
@@ -57,6 +58,16 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   const [showSecrets,setShowSecrets]=useState<Record<string,boolean>>({});
   const [notice,setNotice]=useState("");
   const [error,setError]=useState("");
+  const [cloudQr,setCloudQr]=useState("");
+  const [cloudBackupId,setCloudBackupId]=useState("");
+  const [cloudModal,setCloudModal]=useState(false);
+  const [scanOpen,setScanOpen]=useState(false);
+  const [scanInput,setScanInput]=useState("");
+  const [scanError,setScanError]=useState("");
+  const videoRef=useRef<HTMLVideoElement|null>(null);
+  const scanStreamRef=useRef<MediaStream|null>(null);
+  const scanTimerRef=useRef<number|undefined>(undefined);
+  const scanDetectorRef=useRef<{detect:(source:CanvasImageSource)=>Promise<Array<{rawValue:string}>>}|null>(null);
 
   const loadItems=useCallback(async()=>{
     if(!supabase) return;
@@ -233,6 +244,107 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   }
 
 
+  async function createCloudBackup(){
+    if(!supabase)return;setSaving(true);setError("");setCloudQr("");
+    let uploadedPath:string|null=null;
+    try{
+      const [{data:rows,error:rowsError},{data:settings,error:settingsError}]=await Promise.all([
+        supabase.from("vault_items").select("id,user_id,item_type,payload_ciphertext,payload_nonce,storage_path,is_favorite,deleted_at,purge_after,created_at,updated_at").eq("user_id",userId).limit(5000),
+        supabase.from("vault_settings").select("kdf_salt,kdf_algorithm,kdf_memory_kib,kdf_iterations,kdf_parallelism,wrapped_vault_key,key_version").eq("user_id",userId).single()
+      ]);
+      if(rowsError)throw rowsError;if(settingsError)throw settingsError;
+      const items=[];
+      for(const row of (rows??[]) as Row[]){
+        let fileData:string|null=null;
+        if(row.storage_path){
+          const {data,error}=await supabase.storage.from("eclipse-vault").download(row.storage_path);
+          if(error||!data)throw error??new Error("Could not read an encrypted file for cloud backup.");
+          fileData=encode64(new Uint8Array(await data.arrayBuffer()));
+        }
+        items.push({row:{...row,storage_path:null},fileData});
+      }
+      const bundle={format:"ECLIPSE-BACKUP",version:1,userId,createdAt:new Date().toISOString(),settings,items};
+      const blob=new Blob([JSON.stringify(bundle)],{type:"application/json"});
+      if(blob.size>250*1024*1024)throw new Error("Cloud backup exceeds the 250 MB limit.");
+      const backupId=crypto.randomUUID();
+      uploadedPath=`${userId}/${backupId}.eclbackup`;
+      const {error:uploadError}=await supabase.storage.from("eclipse-backups").upload(uploadedPath,blob,{contentType:"application/json",upsert:false});
+      if(uploadError)throw uploadError;
+      const {error:recordError}=await supabase.from("eclipse_backups").insert({id:backupId,user_id:userId,storage_path:uploadedPath,item_count:items.length,size_bytes:blob.size});
+      if(recordError)throw recordError;
+      const link=new URL(window.location.origin);
+      link.searchParams.set("eclipseBackup",backupId);
+      const qr=await QRCode.toDataURL(link.toString(),{width:320,margin:2,errorCorrectionLevel:"M",color:{dark:"#08090d",light:"#ffffff"}});
+      setCloudBackupId(backupId);setCloudQr(qr);
+      setNotice("Encrypted cloud backup created. Download the QR and keep it private.");
+    }catch(e){
+      if(uploadedPath)await supabase.storage.from("eclipse-backups").remove([uploadedPath]);
+      setError(e instanceof Error?e.message:"Cloud backup could not be created.");
+    }finally{setSaving(false);}
+  }
+  function downloadQr(){
+    if(!cloudQr)return;
+    const a=document.createElement("a");a.href=cloudQr;a.download=`eclipse-cloud-backup-${cloudBackupId.slice(0,8)}.png`;a.click();
+  }
+  function stopQrScanner(){
+    if(scanTimerRef.current!==undefined)window.clearTimeout(scanTimerRef.current);
+    scanTimerRef.current=undefined;
+    scanStreamRef.current?.getTracks().forEach(track=>track.stop());
+    scanStreamRef.current=null;scanDetectorRef.current=null;
+    if(videoRef.current)videoRef.current.srcObject=null;
+  }
+  async function restoreCloudBackup(backupId:string){
+    if(!supabase)return;
+    const cleanId=backupId.trim();
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cleanId)){
+      setError("This QR code is not a valid ECLIPSE cloud backup.");return;
+    }
+    setSaving(true);setError("");
+    try{
+      const {data:record,error:recordError}=await supabase.from("eclipse_backups").select("id,storage_path").eq("id",cleanId).eq("user_id",userId).single();
+      if(recordError||!record)throw new Error("Backup not found for this signed-in account.");
+      const {data,error:downloadError}=await supabase.storage.from("eclipse-backups").download(record.storage_path);
+      if(downloadError||!data)throw downloadError??new Error("Cloud backup file is unavailable.");
+      const backupFile=new File([data],"eclipse-cloud-backup.eclbackup",{type:"application/json"});
+      setSaving(false);
+      await importBackup(backupFile);
+    }catch(e){setError(e instanceof Error?e.message:"Could not load this cloud backup.");setSaving(false);}
+  }
+  async function handleQrValue(rawValue:string){
+    let id=rawValue.trim();
+    try{const parsed=new URL(id);id=parsed.searchParams.get("eclipseBackup")||"";}catch{/* Accept a raw backup ID as well. */}
+    if(!id){setError("This QR code does not contain an ECLIPSE backup reference.");return;}
+    setScanOpen(false);setScanInput(id);await restoreCloudBackup(id);
+  }
+  async function startQrScanner(){
+    setScanError("");
+    const Detector=(window as Window & {BarcodeDetector?:new(options?:{formats:string[]})=>{detect:(source:CanvasImageSource)=>Promise<Array<{rawValue:string}>>}}).BarcodeDetector;
+    if(!Detector){setScanError("Camera QR scanning is not supported in this browser. Paste the backup link or ID below instead.");return;}
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+      scanStreamRef.current=stream;
+      scanDetectorRef.current=new Detector({formats:["qr_code"]});
+      if(videoRef.current){videoRef.current.srcObject=stream;await videoRef.current.play();}
+      const scan=async()=>{
+        const video=videoRef.current;const detector=scanDetectorRef.current;
+        if(!video||!detector||!scanStreamRef.current)return;
+        try{
+          if(video.readyState>=2){
+            const found=await detector.detect(video);
+            if(found[0]?.rawValue){stopQrScanner();await handleQrValue(found[0].rawValue);return;}
+          }
+        }catch{/* Keep scanning; camera frames can occasionally fail detection. */}
+        scanTimerRef.current=window.setTimeout(()=>void scan(),250);
+      };
+      void scan();
+    }catch(e){setScanError(e instanceof Error?e.message:"Camera permission was not granted.");}
+  }
+  useEffect(()=>{
+    const pending=new URLSearchParams(window.location.search).get("eclipseBackup");
+    if(pending){setScanInput(pending);setCloudModal(true);}
+    return ()=>stopQrScanner();
+  },[]);
+
   const passwordHealth=useMemo(()=>{
     const passwords=items.filter(item=>!item.deleted_at&&item.item_type==="password"&&item.payload.secret);
     const counts=new Map<string,number>();
@@ -253,7 +365,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       <div className="vault-side-bottom"><div className="vault-encrypted"><LockKeyhole size={15}/><span>End-to-end encrypted<br/><small>Keys stay on this device</small></span></div><button className="vault-lock" onClick={onSignOut}><LogOut size={15}/> Lock vault</button></div>
     </aside>
     <section className="vault-main">
-      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
+      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>{setCloudModal(true);setScanOpen(false);}} disabled={saving}><Cloud size={15}/> QR Cloud</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
       <div className="vault-content">
         <div className="vault-intro"><div><span className="vault-eyebrow">PRIVATE BY DESIGN</span><h1>{labels[section]}</h1><p>{section==="trash"?"Restore deleted items or permanently remove them.": "Your items are encrypted before they leave this device."}</p></div><div className="vault-count"><b>{visible.length}</b><span>ITEMS</span></div></div>
         {error&&<div className="vault-error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
@@ -262,6 +374,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
         <div className="vault-footnote"><LockKeyhole size={13}/> Content is encrypted locally before database or file storage. Search runs only on unlocked items.</div>
       </div>
     </section>
+    {cloudModal&&<div className="vault-modal-backdrop" onClick={()=>{stopQrScanner();setCloudModal(false);setScanOpen(false);}}><section className="vault-modal vault-cloud-modal" onClick={e=>e.stopPropagation()}><div className="vault-modal-head"><div><span className="vault-eyebrow">ECLIPSE CLOUD</span><h2>QR Backup & Restore</h2></div><button type="button" onClick={()=>{stopQrScanner();setCloudModal(false);setScanOpen(false);}}><X size={18}/></button></div><p className="vault-cloud-copy">Create an encrypted cloud snapshot, save its QR image, and scan it whenever you want to restore this snapshot.</p><div className="vault-cloud-actions"><button type="button" disabled={saving} onClick={()=>void createCloudBackup()}><Cloud size={15}/>{saving?"Creating encrypted backup…":"Create cloud backup + QR"}</button><button type="button" onClick={()=>{setScanOpen(v=>!v);setScanError("");if(scanOpen)stopQrScanner();}}><Camera size={15}/>{scanOpen?"Close scanner":"Scan backup QR"}</button></div>{cloudQr&&<div className="vault-qr-result"><img src={cloudQr} alt="ECLIPSE encrypted cloud backup QR code"/><b>Backup QR ready</b><small>Reference: {cloudBackupId.slice(0,8)}…</small><button type="button" onClick={downloadQr}><Download size={14}/> Download QR image</button></div>}{scanOpen&&<div className="vault-qr-scanner"><video ref={videoRef} playsInline muted/><button type="button" onClick={()=>void startQrScanner()}><Camera size={14}/> Start camera scan</button>{scanError&&<small>{scanError}</small>}<label>Or paste a backup link / ID<input value={scanInput} onChange={e=>setScanInput(e.target.value)} placeholder="Paste QR link or backup ID"/></label><button type="button" disabled={!scanInput.trim()||saving} onClick={()=>void handleQrValue(scanInput)}>Yes, restore this backup</button></div>}<p className="vault-cloud-footnote"><LockKeyhole size={13}/> QR contains only a backup reference. Restore requires your account; backup contents remain encrypted.</p></section></div>}
     {showForm&&<div className="vault-modal-backdrop" onClick={resetForm}><form className="vault-modal" onSubmit={saveItem} onClick={e=>e.stopPropagation()}><div className="vault-modal-head"><div><span className="vault-eyebrow">ENCRYPTED ITEM</span><h2>{editingItem?"Edit vault item":"Add to your vault"}</h2></div><button type="button" onClick={resetForm}><X size={18}/></button></div><label>Item type<select disabled={!!editingItem} value={kind} onChange={e=>setKind(e.target.value as Kind)}><option value="password">Password</option><option value="email">Email account</option><option value="note">Secure note</option><option value="file">File / document</option><option value="gallery">Photo / image</option></select></label><div className="vault-icon-picker"><div className="vault-icon-picker-head"><b>Choose an icon</b><span>{iconCatalog.length}+ built-in icons</span></div><div className="vault-icon-tools"><button type="button" onClick={()=>{const detected=detectPlatformIcon(website||title);setDetectedIcon(detected);setIconKey(detected);setCustomIconData("");}}>Detect from website / title</button><button type="button" onClick={()=>{setIconKey(detectedIcon);setCustomIconData("");}}>Restore detected icon</button></div><input className="vault-icon-search" value={iconQuery} onChange={e=>setIconQuery(e.target.value)} placeholder="Search icons…"/><select className="vault-icon-category" value={iconCategory} onChange={e=>setIconCategory(e.target.value)}>{iconCategories.map(category=><option key={category}>{category}</option>)}</select><div className="vault-icon-grid">{filteredIcons.map(icon=>{const Icon=icon.Icon;return <button type="button" key={icon.key} className={iconKey===icon.key&&!customIconData?"selected":""} title={icon.name} onClick={()=>{setIconKey(icon.key);setDetectedIcon(icon.key);setCustomIconData("");}}><Icon size={18}/><small>{icon.name}</small></button>})}</div><label className="vault-custom-icon">Upload custom icon (PNG, JPG, SVG, WebP)<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={e=>{const selected=e.target.files?.[0];if(!selected)return;if(selected.size>256*1024){setError("Custom icons must be 256 KB or smaller.");e.target.value="";return;}const reader=new FileReader();reader.onload=()=>{setCustomIconData(String(reader.result||""));};reader.readAsDataURL(selected);}}/></label>{customIconData&&<div className="vault-custom-preview"><img src={customIconData} alt="Custom icon preview"/><button type="button" onClick={()=>setCustomIconData("")}>Use built-in icon</button></div>}</div><label>Title<input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Personal Gmail" required maxLength={120}/></label>{(kind==="password"||kind==="email")&&<><label>Username / Email<input value={username} onChange={e=>setUsername(e.target.value)} placeholder="Account username or email"/></label><label>{kind==="email"?"App password / credential":"Password"}<input value={secret} onChange={e=>setSecret(e.target.value)} placeholder="Stored encrypted" autoComplete="off"/></label><label>Website (optional)<input value={website} onChange={e=>setWebsite(e.target.value)} placeholder="https://example.com"/></label></>}{kind==="note"&&<label>Note<textarea value={body} onChange={e=>setBody(e.target.value)} placeholder="Write your private note…" rows={5}/></label>}{(kind==="file"||kind==="gallery")&&!editingItem&&<label>Choose file<input type="file" onChange={e=>setFile(e.target.files?.[0]??null)} required/><small>Maximum 50 MB. The file is encrypted before upload.</small></label>}<div className="vault-modal-actions"><button type="button" onClick={resetForm}>Cancel</button><button type="submit" disabled={saving}>{saving?"Encrypting & saving…":editingItem?"Save changes":"Encrypt and save"}</button></div></form></div>}
   </main>;
 }
