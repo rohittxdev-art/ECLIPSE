@@ -175,7 +175,7 @@ export default function VaultGate({ user, onSignOut }: { user: User; onSignOut: 
           <button className="auth-submit" type="submit" disabled={busy}>{busy ? "Securing your vault…" : recoveryMode ? "Recover and set new passphrase" : configured ? "Unlock vault" : "Create master key"} <ArrowRight size={16}/></button>
         </form>
         <div className="vault-security-note"><KeyRound size={15}/><span>Argon2id key derivation · XChaCha20-Poly1305 authenticated encryption</span></div>
-        <div className="auth-switch"><button onClick={onSignOut}>Sign out of account</button></div>
+        <div className="auth-switch">{configured && <button onClick={() => {setRecoveryMode(v => !v);setError("");setMessage("");setRecoveryFile(null);setMasterPassword("");setConfirmPassword("");}}>{recoveryMode ? "Back to normal unlock" : "Forgot master passphrase? Use recovery kit"}</button>}<button onClick={onSignOut}>Sign out of account</button></div>
         <div className="auth-foot"><LockKeyhole size={13}/> Your master passphrase is never sent to Supabase.</div>
       </div>
       <div className="auth-bottom">EVERYTHING PROTECTED. EVERYTHING YOURS.</div>
