@@ -4,7 +4,7 @@ import {
   LockKeyhole, LogOut, Plus, Search, ShieldCheck, Star, Trash2, Undo2, X,
 } from "lucide-react";
 import { supabase } from "./lib/supabase";
-import { decryptVaultBytes, decryptVaultValue, encryptVaultBytes, encryptVaultValue } from "./lib/vaultCrypto";
+import { createRecoveryKit, decryptVaultBytes, decryptVaultValue, encryptVaultBytes, encryptVaultValue } from "./lib/vaultCrypto";
 
 type Kind = "password" | "email" | "note" | "file" | "gallery";
 type VaultPayload = { title: string; username?: string; secret?: string; website?: string; body?: string; fileName?: string; mimeType?: string; fileSize?: number; fileNonce?: string };
@@ -158,6 +158,16 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     }catch(cause){setError(cause instanceof Error?cause.message:"Download failed.");}
   }
   async function copyValue(value:string){try{await navigator.clipboard.writeText(value);setNotice("Copied to clipboard.");}catch{setError("Clipboard permission was not available.");}}
+  async function exportRecoveryKit(){
+    if(!window.confirm("This recovery file can unlock your vault and reset its master passphrase. Anyone who gets the file can access your vault. Save it offline and never share it. Continue?"))return;
+    try{
+      const kit=await createRecoveryKit(vaultKey,userId);
+      const url=URL.createObjectURL(new Blob([JSON.stringify(kit)],{type:"application/json"}));
+      const a=document.createElement("a");a.href=url;a.download="eclipse-recovery.eclrecovery";a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+      setNotice("Recovery kit created. Store it offline in a secure place.");
+    }catch(e){setError(e instanceof Error?e.message:"Could not create recovery kit.");}
+  }
+
   function encode64(bytes:Uint8Array){let s="";for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(s);}
   function decode64(s:string){const b=atob(s),out=new Uint8Array(b.length);for(let i=0;i<b.length;i++)out[i]=b.charCodeAt(i);return out;}
   async function exportBackup(){
@@ -207,7 +217,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       <div className="vault-side-bottom"><div className="vault-encrypted"><LockKeyhole size={15}/><span>End-to-end encrypted<br/><small>Keys stay on this device</small></span></div><button className="vault-lock" onClick={onSignOut}><LogOut size={15}/> Lock vault</button></div>
     </aside>
     <section className="vault-main">
-      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
+      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
       <div className="vault-content">
         <div className="vault-intro"><div><span className="vault-eyebrow">PRIVATE BY DESIGN</span><h1>{labels[section]}</h1><p>{section==="trash"?"Restore deleted items or permanently remove them.": "Your items are encrypted before they leave this device."}</p></div><div className="vault-count"><b>{visible.length}</b><span>ITEMS</span></div></div>
         {error&&<div className="vault-error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
