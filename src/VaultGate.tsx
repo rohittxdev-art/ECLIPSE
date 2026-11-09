@@ -83,7 +83,7 @@ export default function VaultGate({ user, onSignOut }: { user: User; onSignOut: 
           wrapped_vault_key: JSON.stringify(result.wrapped), key_version: 1,
         });
         setConfigured(true);
-        setMessage("Your vault key has been created and wrapped. Keep your master passphrase safe; recovery is not configured yet.");
+        setMessage("Your vault key is ready. After unlocking, create an offline recovery kit from the workspace so you can reset your master passphrase if needed.");
       } else {
         if (!settings?.wrapped_vault_key) throw new Error("Vault key metadata is incomplete. Contact support before continuing.");
         const params: KdfParameters = {
