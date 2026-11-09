@@ -1,20 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { createClient, type User } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 import { LockKeyhole, ShieldCheck, Eye, EyeOff, ArrowRight } from "lucide-react";
-import App from "./App";
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
-
-export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: true,
-        detectSessionInUrl: false,
-      },
-    })
-  : null;
+import VaultGate from "./VaultGate";
+import { supabase } from "./lib/supabase";
 
 export default function AuthGate() {
   const [user, setUser] = useState<User | null>(null);
@@ -82,7 +70,7 @@ export default function AuthGate() {
   if (!ready) return <div className="auth-loading"><div className="auth-mark"><ShieldCheck size={25}/></div><span>Preparing your private space…</span></div>;
 
   if (user) {
-    return <><div className="prototype-notice"><LockKeyhole size={15}/><span><b>Prototype mode:</b> Sign-in is connected, but vault encryption and real item storage are not active yet. Don’t add real passwords or private files.</span><button onClick={signOut}>Sign out</button></div><App onSignOut={signOut} /></>;
+    return <><VaultGate user={user} onSignOut={signOut} /></>;
   }
 
   return (
