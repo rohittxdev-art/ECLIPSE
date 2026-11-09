@@ -41,8 +41,12 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     const rows=(data??[]) as Row[];
     const expired=rows.filter(r=>r.deleted_at && r.purge_after && new Date(r.purge_after).getTime()<=Date.now());
     for(const row of expired){
-      if(row.storage_path) await supabase.storage.from("eclipse-vault").remove([row.storage_path]);
-      await supabase.from("vault_items").delete().eq("id",row.id).eq("user_id",userId);
+      let safeToDelete=true;
+      if(row.storage_path){
+        const {error:storageError}=await supabase.storage.from("eclipse-vault").remove([row.storage_path]);
+        if(storageError){safeToDelete=false;setError("An expired encrypted file could not be removed from storage yet.");}
+      }
+      if(safeToDelete) await supabase.from("vault_items").delete().eq("id",row.id).eq("user_id",userId);
     }
     const activeRows=rows.filter(r=>!expired.some(e=>e.id===r.id));
     const decoded:Item[]=[];
@@ -126,7 +130,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   async function moveToTrash(item:Item){
     if(!supabase)return;
     const {error:e}=await supabase.from("vault_items").update({deleted_at:new Date().toISOString()}).eq("id",item.id).eq("user_id",userId);
-    if(e)setError(e.message);else{setNotice("Moved to recycle bin. It is scheduled for deletion after 30 days.");await loadItems();}
+    if(e)setError(e.message);else{setNotice("Moved to recycle bin. It becomes eligible for permanent deletion after 30 days and is cleaned up the next time you unlock your vault.");await loadItems();}
   }
   async function restore(item:Item){
     if(!supabase)return;
