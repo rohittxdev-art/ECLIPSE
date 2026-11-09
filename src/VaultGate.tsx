@@ -7,7 +7,10 @@ import {
   clearVaultKey,
   createKdfParameters,
   unwrapVaultKey,
-  wrapNewVaultKey,\n  restoreVaultKeyFromKit,\n  wrapExistingVaultKey,\n  type RecoveryKit,
+  wrapNewVaultKey,
+  restoreVaultKeyFromKit,
+  wrapExistingVaultKey,
+  type RecoveryKit,
   type KdfParameters,
   type WrappedVaultKey,
 } from "./lib/vaultCrypto";
@@ -31,7 +34,9 @@ export default function VaultGate({ user, onSignOut }: { user: User; onSignOut: 
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [message, setMessage] = useState("");\n  const [recoveryMode, setRecoveryMode] = useState(false);\n  const [recoveryFile, setRecoveryFile] = useState<File | null>(null);
+  const [message, setMessage] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryFile, setRecoveryFile] = useState<File | null>(null);
 
   useEffect(() => {
     let active = true;
