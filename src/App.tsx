@@ -133,7 +133,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   async function moveToTrash(item:Item){
     if(!supabase)return;
     const now=new Date();const {error:e}=await supabase.from("vault_items").update({deleted_at:now.toISOString(),purge_after:new Date(now.getTime()+30*24*60*60*1000).toISOString()}).eq("id",item.id).eq("user_id",userId);
-    if(e)setError(e.message);else{setNotice("Moved to recycle bin. It becomes eligible for permanent deletion after 30 days and is cleaned up the next time you unlock your vault.");await loadItems();}
+    if(e)setError(e.message);else{setNotice("Moved to recycle bin. It will be permanently deleted by the automatic cleanup job after 30 days.");await loadItems();}
   }
   async function restore(item:Item){
     if(!supabase)return;
