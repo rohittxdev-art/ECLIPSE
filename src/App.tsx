@@ -41,6 +41,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   const [query,setQuery]=useState("");
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const [uploadProgress,setUploadProgress]=useState<{status:"active"|"done"|"error";totalFiles:number;completedFiles:number;totalBytes:number;completedBytes:number;currentFile:string;stage:"preparing"|"encrypting"|"uploading"|"saving"|"complete"|"failed";startedAt:number;error?:string}|null>(null);
   const [showForm,setShowForm]=useState(false);
   const [editingItem,setEditingItem]=useState<Item|null>(null);
   const [kind,setKind]=useState<Kind>("password");
@@ -172,15 +173,21 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     if(files.some(f=>f.size>50*1024*1024)){setError("Each file must be 50 MB or smaller.");return;}
     if(total>250*1024*1024){setError("The combined upload must be 250 MB or smaller.");return;}
     setSaving(true);setError("");
+    setUploadProgress({status:"active",totalFiles:files.length,completedFiles:0,totalBytes:total,completedBytes:0,currentFile:files[0].name,stage:"preparing",startedAt:Date.now()});
     const uploadedPaths:string[]=[];const insertedIds:string[]=[];
+    let completedBytes=0;
     try{
-      for(const selectedFile of files){
+      for(let index=0;index<files.length;index++){
+        const selectedFile=files[index];
+        setUploadProgress(p=>p?{...p,currentFile:selectedFile.name,completedFiles:index,completedBytes,stage:"encrypting"}:p);
         const bytes=new Uint8Array(await selectedFile.arrayBuffer());
         const encrypted=await encryptVaultBytes(bytes,vaultKey,userId);
         const id=crypto.randomUUID();const path=`${userId}/${id}.ecl`;
+        setUploadProgress(p=>p?{...p,currentFile:selectedFile.name,stage:"uploading"}:p);
         const {error:uploadError}=await supabase.storage.from("eclipse-vault").upload(path,new Blob([encrypted.ciphertext.buffer as ArrayBuffer],{type:"application/octet-stream"}),{contentType:"application/octet-stream",upsert:false});
         if(uploadError)throw uploadError;
         uploadedPaths.push(path);
+        setUploadProgress(p=>p?{...p,currentFile:selectedFile.name,stage:"saving"}:p);
         const relativePath=(selectedFile as File & {webkitRelativePath?:string}).webkitRelativePath||"";
         const payload:VaultPayload={
           title:selectedFile.name,
@@ -199,14 +206,24 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
         });
         if(insertError)throw insertError;
         insertedIds.push(id);
+        completedBytes+=selectedFile.size;
+        setUploadProgress(p=>p?{...p,completedFiles:index+1,completedBytes,currentFile:index===files.length-1?"All files secured":files[index+1].name,stage:index===files.length-1?"complete":"preparing"}:p);
       }
+      setUploadProgress(p=>p?{...p,status:"done",completedFiles:files.length,completedBytes:total,currentFile:"All files secured",stage:"complete"}:p);
       setNotice(`Securely added ${files.length} file${files.length===1?"":"s"} to your vault.`);
       setSection("all");await loadItems();
     }catch(cause){
       if(insertedIds.length)await supabase.from("vault_items").delete().in("id",insertedIds).eq("user_id",userId);
       if(uploadedPaths.length)await supabase.storage.from("eclipse-vault").remove(uploadedPaths);
-      setError(cause instanceof Error?cause.message:"Some files could not be added. Completed uploads were rolled back.");
-    }finally{setSaving(false);if(bulkInputRef.current)bulkInputRef.current.value="";if(folderInputRef.current)folderInputRef.current.value="";}
+      const message=cause instanceof Error?cause.message:"Some files could not be added. Completed uploads were rolled back.";
+      setUploadProgress(p=>p?{...p,status:"error",stage:"failed",error:message}:p);
+      setError(message);
+    }finally{
+      setSaving(false);
+      if(bulkInputRef.current)bulkInputRef.current.value="";
+      if(folderInputRef.current)folderInputRef.current.value="";
+      window.setTimeout(()=>setUploadProgress(p=>p&&p.status!=="active"?null:p),9000);
+    }
   }
 
   async function toggleFavorite(item:Item){
@@ -414,6 +431,18 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     </aside>
     <section className="vault-main">
       <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><button className="vault-add" onClick={()=>{setCloudModal(true);setScanOpen(false);}} disabled={saving}><Cloud size={15}/> QR Cloud</button><button className="vault-add" onClick={()=>void exportRecoveryKit()}>Recovery kit</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>bulkInputRef.current?.click()} disabled={saving}><Plus size={15}/> Add files</button><button className="vault-add" onClick={()=>folderInputRef.current?.click()} disabled={saving}><Folder size={15}/> Add folder</button><input ref={bulkInputRef} hidden type="file" multiple onChange={e=>void uploadMultipleFiles(Array.from(e.target.files??[]))}/><input ref={el=>{folderInputRef.current=el;if(el)el.setAttribute("webkitdirectory","");}} hidden type="file" multiple onChange={e=>void uploadMultipleFiles(Array.from(e.target.files??[]))}/><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
+      {uploadProgress&&<section className={`vault-upload-tracker ${uploadProgress.status}`} aria-live="polite">
+        <div className="vault-upload-orbit"><div className="vault-upload-orbit-core">{uploadProgress.status==="done"?<Check size={19}/>:uploadProgress.status==="error"?<X size={19}/>:<span/>}</div></div>
+        <div className="vault-upload-main">
+          <div className="vault-upload-heading"><div><span className="vault-eyebrow">{uploadProgress.status==="done"?"UPLOAD COMPLETE":uploadProgress.status==="error"?"UPLOAD INTERRUPTED":"ECLIPSE TRANSFER"} </span><b>{uploadProgress.status==="done"?"Your files are secured":uploadProgress.status==="error"?"Could not finish this batch":"Securing your files…"}</b></div><strong>{uploadProgress.status==="done"?"100%":uploadProgress.status==="error"?"—":`${Math.round(uploadProgress.completedBytes/uploadProgress.totalBytes*100)}%`}</strong></div>
+          <div className="vault-upload-track"><span style={{width:`${Math.round(uploadProgress.completedBytes/uploadProgress.totalBytes*100)}%`}}/></div>
+          <div className="vault-upload-meta"><span>{uploadProgress.completedFiles} / {uploadProgress.totalFiles} files complete</span><span>{(uploadProgress.completedBytes/1048576).toFixed(1)} / {(uploadProgress.totalBytes/1048576).toFixed(1)} MB</span></div>
+          <div className="vault-upload-current"><span className="vault-upload-pulse"/><span>{uploadProgress.status==="done"?"All files encrypted and saved":uploadProgress.status==="error"?"Batch rolled back":uploadProgress.stage==="encrypting"?"Encrypting":uploadProgress.stage==="uploading"?"Uploading encrypted file":uploadProgress.stage==="saving"?"Saving vault record":"Preparing next file"} · {uploadProgress.currentFile}</span></div>
+          {uploadProgress.status==="active"&&<small className="vault-upload-eta">{uploadProgress.completedBytes>0?(()=>{const elapsed=(Date.now()-uploadProgress.startedAt)/1000;const rate=uploadProgress.completedBytes/Math.max(elapsed,1);const seconds=Math.max(0,Math.ceil((uploadProgress.totalBytes-uploadProgress.completedBytes)/rate));return `Approx. ${seconds<60?`${seconds}s`:`${Math.floor(seconds/60)}m ${seconds%60}s`} remaining`;})():"Estimating time remaining…"}</small>}
+          {uploadProgress.error&&<small className="vault-upload-error">{uploadProgress.error}</small>}
+        </div>
+        <button className="vault-upload-dismiss" onClick={()=>setUploadProgress(null)} aria-label="Dismiss upload status"><X size={15}/></button>
+      </section>}
       <div className="vault-content">
         <div className="vault-intro"><div><span className="vault-eyebrow">PRIVATE BY DESIGN</span><h1>{labels[section]}</h1><p>{section==="trash"?"Restore deleted items or permanently remove them.": "Your items are encrypted before they leave this device."}</p></div><div className="vault-count"><b>{visible.length}</b><span>ITEMS</span></div></div>
         {error&&<div className="vault-error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
