@@ -341,7 +341,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   }
   useEffect(()=>{
     const pending=new URLSearchParams(window.location.search).get("eclipseBackup");
-    if(pending){setScanInput(pending);setCloudModal(true);}
+    if(pending){setScanInput(pending);setCloudModal(true);setScanOpen(true);}
     return ()=>stopQrScanner();
   },[]);
 
