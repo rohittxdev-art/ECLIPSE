@@ -110,7 +110,7 @@ export default function VaultGate({ user, onSignOut }: { user: User; onSignOut: 
     setConfirmPassword("");
   }
 
-  if (vaultKey) return <><div className="prototype-notice"><LockKeyhole size={15}/><span><b>Encryption foundation enabled:</b> Vault key is unlocked in memory. Item forms, file encryption pipeline and recovery are still under development; don’t store real secrets yet.</span><button onClick={lockVault}>Lock vault</button><button onClick={onSignOut}>Sign out</button></div><App onSignOut={lockVault} /></>;
+  if (vaultKey) return <><div className="prototype-notice"><LockKeyhole size={15}/><span><b>Encryption foundation enabled:</b> Vault key is unlocked in memory. Item forms, file encryption pipeline and recovery are still under development; don’t store real secrets yet.</span><button onClick={lockVault}>Lock vault</button><button onClick={onSignOut}>Sign out</button></div><App onSignOut={lockVault} vaultKey={vaultKey} userId={user.id} /></>;
 
   if (loading) return <div className="auth-loading"><div className="auth-mark"><ShieldCheck size={25}/></div><span>Checking your vault…</span></div>;
 
