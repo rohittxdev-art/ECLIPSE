@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
-  ArrowDownToLine, Check, Copy, FileImage, FileText, Heart, KeyRound,
+  ArrowDownToLine, Check, Copy, Download, FileImage, FileText, Heart, KeyRound,
   LockKeyhole, LogOut, Plus, Search, ShieldCheck, Star, Trash2, Undo2, X,
 } from "lucide-react";
 import { supabase } from "./lib/supabase";
@@ -158,6 +158,45 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
     }catch(cause){setError(cause instanceof Error?cause.message:"Download failed.");}
   }
   async function copyValue(value:string){try{await navigator.clipboard.writeText(value);setNotice("Copied to clipboard.");}catch{setError("Clipboard permission was not available.");}}
+  function encode64(bytes:Uint8Array){let s="";for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(s);}
+  function decode64(s:string){const b=atob(s),out=new Uint8Array(b.length);for(let i=0;i<b.length;i++)out[i]=b.charCodeAt(i);return out;}
+  async function exportBackup(){
+    if(!supabase)return;setSaving(true);setError("");
+    try{
+      const [{data:rows,error:rowsError},{data:settings,error:settingsError}]=await Promise.all([
+        supabase.from("vault_items").select("id,user_id,item_type,payload_ciphertext,payload_nonce,storage_path,is_favorite,deleted_at,purge_after,created_at,updated_at").eq("user_id",userId).limit(5000),
+        supabase.from("vault_settings").select("kdf_salt,kdf_algorithm,kdf_memory_kib,kdf_iterations,kdf_parallelism,wrapped_vault_key,key_version").eq("user_id",userId).single()
+      ]);
+      if(rowsError)throw rowsError;if(settingsError)throw settingsError;
+      const items=[];
+      for(const row of (rows??[]) as Row[]){
+        let fileData:string|null=null;
+        if(row.storage_path){const {data,error}=await supabase.storage.from("eclipse-vault").download(row.storage_path);if(error||!data)throw error??new Error("Could not read an encrypted file for backup.");fileData=encode64(new Uint8Array(await data.arrayBuffer()));}
+        items.push({row:{...row,storage_path:null},fileData});
+      }
+      const bundle={format:"ECLIPSE-BACKUP",version:1,userId,createdAt:new Date().toISOString(),settings,items};
+      const url=URL.createObjectURL(new Blob([JSON.stringify(bundle)],{type:"application/json"}));
+      const a=document.createElement("a");a.href=url;a.download=`eclipse-backup-${new Date().toISOString().slice(0,10)}.eclbackup`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);
+      setNotice("Encrypted backup exported. Store it somewhere private and keep a separate copy.");
+    }catch(e){setError(e instanceof Error?e.message:"Backup export failed.");}finally{setSaving(false);}
+  }
+  async function importBackup(file:File|null){
+    if(!supabase||!file)return;if(file.size>250*1024*1024){setError("Backup file exceeds the 250 MB import limit.");return;}
+    if(!window.confirm("Restore items from this ECLIPSE backup? Existing items will remain; restored items are added as copies."))return;
+    setSaving(true);setError("");
+    try{
+      const b=JSON.parse(await file.text()) as {format:string;version:number;userId:string;settings:Record<string,unknown>;items:Array<{row:Row;fileData:string|null}>};
+      if(b.format!=="ECLIPSE-BACKUP"||b.version!==1||b.userId!==userId||!Array.isArray(b.items)||!b.settings)throw new Error("Invalid backup or backup belongs to another account.");
+      for(const entry of b.items){
+        const id=crypto.randomUUID();let path:string|null=null;
+        if(entry.fileData){path=`${userId}/${id}.ecl`;const bytes=decode64(entry.fileData);const {error}=await supabase.storage.from("eclipse-vault").upload(path,new Blob([bytes.buffer as ArrayBuffer],{type:"application/octet-stream"}),{contentType:"application/octet-stream",upsert:false});if(error)throw error;}
+        const {error}=await supabase.from("vault_items").insert({...entry.row,id,user_id:userId,storage_path:path});
+        if(error)throw error;
+      }
+      setNotice(`Restored ${b.items.length} encrypted items. Existing items were kept.`);await loadItems();
+    }catch(e){setError(e instanceof Error?e.message:"Backup restore failed.");}finally{setSaving(false);}
+  }
+
 
   const nav:Section[]=["all","password","email","file","gallery","note","favorites","recent","trash"];
   return <main className="vault-app">
@@ -168,7 +207,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
       <div className="vault-side-bottom"><div className="vault-encrypted"><LockKeyhole size={15}/><span>End-to-end encrypted<br/><small>Keys stay on this device</small></span></div><button className="vault-lock" onClick={onSignOut}><LogOut size={15}/> Lock vault</button></div>
     </aside>
     <section className="vault-main">
-      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
+      <header className="vault-top"><div><small>WORKSPACE / ECLIPSE</small><b>{labels[section]}</b></div><div className="vault-top-actions"><label className="vault-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search encrypted items…"/></label><button className="vault-add" onClick={()=>void exportBackup()} disabled={saving}><Download size={15}/> Backup</button><label className="vault-add" style={{cursor:"pointer"}}>Restore<input hidden type="file" accept=".eclbackup,application/json" onChange={e=>void importBackup(e.target.files?.[0]??null)}/></label><button className="vault-add" onClick={()=>{setKind(section==="email"?"email":section==="note"?"note":section==="file"?"file":section==="gallery"?"gallery":"password");setShowForm(true);}}><Plus size={16}/> Add item</button></div></header>
       <div className="vault-content">
         <div className="vault-intro"><div><span className="vault-eyebrow">PRIVATE BY DESIGN</span><h1>{labels[section]}</h1><p>{section==="trash"?"Restore deleted items or permanently remove them.": "Your items are encrypted before they leave this device."}</p></div><div className="vault-count"><b>{visible.length}</b><span>ITEMS</span></div></div>
         {error&&<div className="vault-error">{error}<button onClick={()=>setError("")}><X size={14}/></button></div>}
