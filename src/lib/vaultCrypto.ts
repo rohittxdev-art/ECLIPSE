@@ -112,3 +112,20 @@ export async function decryptVaultValue<T>(ciphertext: string, nonce: string, va
 export function clearVaultKey(key: Uint8Array | null) {
   if (key) sodium.memzero(key);
 }
+
+
+export async function encryptVaultBytes(bytes: Uint8Array, vaultKey: Uint8Array, userId: string): Promise<{ ciphertext: Uint8Array; nonce: string }> {
+  await ready();
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const aad = encoder.encode(`ECLIPSE|file|v1|${userId}`);
+  const ciphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(bytes, aad, null, nonce, vaultKey);
+  return { ciphertext, nonce: sodium.to_base64(nonce) };
+}
+
+export async function decryptVaultBytes(ciphertext: Uint8Array, nonce: string, vaultKey: Uint8Array, userId: string): Promise<Uint8Array> {
+  await ready();
+  const aad = encoder.encode(`ECLIPSE|file|v1|${userId}`);
+  return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+    null, ciphertext, aad, sodium.from_base64(nonce), vaultKey,
+  );
+}
