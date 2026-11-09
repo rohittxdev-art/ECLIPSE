@@ -33,3 +33,6 @@
 .vault-qr-scanner input{padding:10px;background:#101116;border:1px solid #30313b;border-radius:8px;color:#f5f5f7;font:11px 'DM Sans'}
 .vault-cloud-footnote{display:flex;gap:7px;align-items:flex-start;margin:0;color:#858a97;font-size:9px;line-height:1.6}
 @media(max-width:520px){.vault-cloud-actions{display:grid}.vault-cloud-actions button{width:100%}}
+
+.vault-top-actions input[type="file"][hidden]{display:none}
+@media(max-width:760px){.vault-top-actions{flex-wrap:wrap}.vault-top-actions .vault-add{font-size:9px;padding:8px 9px}}
