@@ -113,9 +113,10 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
         payload={...payload,fileName:file.name,mimeType:file.type||"application/octet-stream",fileSize:file.size,fileNonce:encryptedFile.nonce};
       }
       const encrypted=await encryptVaultValue(payload,vaultKey,userId);
-      const {error:insertError}=await supabase.from("vault_items").insert({
-        user_id:userId,item_type:kind,payload_ciphertext:encrypted.ciphertext,payload_nonce:encrypted.nonce,storage_path:uploadedPath,
-      });
+      const writeQuery=editingItem
+        ? supabase.from("vault_items").update({item_type:kind,payload_ciphertext:encrypted.ciphertext,payload_nonce:encrypted.nonce}).eq("id",editingItem.id).eq("user_id",userId)
+        : supabase.from("vault_items").insert({user_id:userId,item_type:kind,payload_ciphertext:encrypted.ciphertext,payload_nonce:encrypted.nonce,storage_path:uploadedPath});
+      const {error:insertError}=await writeQuery;
       if(insertError)throw insertError;
       resetForm();setNotice(editingItem?"Changes encrypted and saved.":"Saved securely.");await loadItems();
     }catch(cause){
