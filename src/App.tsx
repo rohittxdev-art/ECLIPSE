@@ -54,6 +54,26 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
   },[userId,vaultKey]);
 
   useEffect(()=>{void loadItems();},[loadItems]);
+  useEffect(()=>{
+    const idleLimit=5*60*1000;
+    let lastActivity=Date.now();
+    let timer=0;
+    const checkIdle=()=>{
+      const remaining=idleLimit-(Date.now()-lastActivity);
+      if(remaining<=0){onSignOut();return;}
+      timer=window.setTimeout(checkIdle,remaining);
+    };
+    const activity=()=>{
+      lastActivity=Date.now();
+      window.clearTimeout(timer);
+      timer=window.setTimeout(checkIdle,idleLimit);
+    };
+    const events=["pointerdown","keydown","touchstart","mousemove","scroll"];
+    events.forEach(name=>window.addEventListener(name,activity,{passive:true}));
+    timer=window.setTimeout(checkIdle,idleLimit);
+    return ()=>{window.clearTimeout(timer);events.forEach(name=>window.removeEventListener(name,activity));};
+  },[onSignOut]);
+
 
   const visible=useMemo(()=>{
     let list=items;
