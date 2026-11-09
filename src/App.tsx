@@ -82,7 +82,7 @@ export default function App({ onSignOut, vaultKey, userId }: { onSignOut: () => 
         const encryptedFile=await encryptVaultBytes(fileBytes,vaultKey,userId);
         const id=crypto.randomUUID();
         uploadedPath=`${userId}/${id}.ecl`;
-        const {error:uploadError}=await supabase.storage.from("eclipse-vault").upload(uploadedPath,encryptedFile.ciphertext,{contentType:"application/octet-stream",upsert:false});
+        const {error:uploadError}=await supabase.storage.from("eclipse-vault").upload(uploadedPath,new Blob([encryptedFile.ciphertext.buffer as ArrayBuffer],{type:"application/octet-stream"}),{contentType:"application/octet-stream",upsert:false});
         if(uploadError)throw uploadError;
         payload={...payload,fileName:file.name,mimeType:file.type||"application/octet-stream",fileSize:file.size,fileNonce:encryptedFile.nonce};
       }
